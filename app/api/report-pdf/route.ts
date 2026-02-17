@@ -10,7 +10,7 @@ const DEFAULT_BODY_FONT = 'Times-Roman';
 // Register Inter font with correct weights: 300,400,500,600,700,800,900 per layout.tsx
 try {
   Font.register({
-    family: 'Inter',
+    family: 'TenderingBody',
     fonts: [
       {
         src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lO6z0y0.woff2', // 300 (Light)

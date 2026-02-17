@@ -37,7 +37,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { AnalysisResult, ProcurementData, Severity, SpecificationItem, LegalComplianceResult } from './types';
-import { analyzeProcurement as apiAnalyze, analyzeLegalCompliance as apiLegalAnalyze } from './app/actions';
+import { analyzeProcurementWithLegal as apiAnalyze } from './app/actions';
 
 const FidelityLogo: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -127,7 +127,6 @@ const LOADING_SLIDES = [
 const App: React.FC = () => {
   const [showLanding, setShowLanding] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [legalLoading, setLegalLoading] = useState(false);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [legalResult, setLegalResult] = useState<LegalComplianceResult | null>(null);
@@ -148,13 +147,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let interval: any;
-    if (loading || legalLoading) {
+    if (loading) {
       interval = setInterval(() => {
         setCurrentSlideIndex((prev) => (prev + 1) % LOADING_SLIDES.length);
       }, 5000);
     }
     return () => clearInterval(interval);
-  }, [loading, legalLoading]);
+  }, [loading]);
 
   const handleReset = () => {
     setResult(null);
@@ -209,8 +208,9 @@ const App: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const analysis = await apiAnalyze(formData);
-      setResult(analysis);
+      const unified = await apiAnalyze(formData);
+      setResult(unified.analysis);
+      setLegalResult(unified.legal);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       setError(err.message || "Došlo je do greške prilikom revizije.");
@@ -219,47 +219,40 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLegalAnalysis = async () => {
+  const handleDownloadReport = async () => {
     if (!result) return;
-    setLegalLoading(true);
     setError(null);
+
     try {
-      const legalAnalysis = await apiLegalAnalyze(formData, result);
-      setLegalResult(legalAnalysis);
-      const target = document.getElementById('legal-analysis-section');
-      if (target) target.scrollIntoView({ behavior: 'smooth' });
-    } catch (err: any) {
-      setError("Neuspješna pravna analiza. Pokušajte ponovo.");
-    } finally {
-      setLegalLoading(false);
-    }
-  };
-
-  const handleDownloadReport = () => {
-    if (!result) return;
-    let reportText = `
-TENDERING - FORENZIČKI IZVJEŠTAJ NABAVKE
-Generisano: ${new Date().toLocaleString('sr-ME')}
------------------------------------------------------------
-ZAKLJUČAK: ${result.conclusion}
-INDEKS RIZIKA: ${result.probability}%
-TRŽIŠNA PROCJENA: ${result.savings.estimatedMarketPrice.toLocaleString()} EUR
------------------------------------------------------------
-    `.trim();
-
-    if (legalResult) {
-      reportText += `\n\nANALIZA USKLAĐENOSTI (ZJN & SMJERNICE MF):\n${legalResult.summary}\n`;
-      legalResult.violations.forEach(v => {
-        reportText += `- ${v.article}: ${v.description} (${v.cautionaryNote})\n`;
+      const generatedAtISO = new Date().toISOString();
+      const filename = `tendering_izvjestaj_${new Date().getTime()}.pdf`;
+      const res = await fetch('/api/report-pdf', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          generatedAtISO,
+          formData,
+          result,
+          legalResult,
+        }),
       });
-    }
 
-    const blob = new Blob([reportText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `tendering_izvjestaj_${new Date().getTime()}.txt`;
-    link.click();
+      if (!res.ok) {
+        throw new Error('PDF generation failed');
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError("Neuspješno generisanje PDF-a. Pokušajte ponovo.");
+    }
   };
 
   const handleSendEmail = () => {
@@ -406,7 +399,7 @@ Analiza generisana na: ${BASE_URL}
       </nav>
 
       {/* Loading Overlay */}
-      {(loading || legalLoading) && (
+      {loading && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-slate-100">
              <div className="h-full bg-[#B71C4A] animate-[progress_5s_linear_infinite]"></div>
@@ -414,7 +407,7 @@ Analiza generisana na: ${BASE_URL}
           <div className="max-w-2xl w-full space-y-8 md:space-y-12 text-center animate-in fade-in duration-1000">
             <div className="space-y-4">
               <p className="text-[10px] md:text-xs font-black text-slate-300 uppercase tracking-[0.2em] mb-4 md:mb-8 px-2">
-                {legalLoading ? 'DUBINSKA PRAVNA ANALIZA U TOKU...' : 'AI FORENZIČKA ANALIZA U TOKU...'}
+                AI FORENZIČKA + PRAVNA ANALIZA U TOKU...
               </p>
               
               <div key={currentSlideIndex} className="animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col items-center px-4">
@@ -475,15 +468,7 @@ Analiza generisana na: ${BASE_URL}
                 <p className="text-lg md:text-xl lg:text-2xl font-medium text-slate-800 leading-snug">
                   {result.conclusion}. <span className="font-bold">Indeks rizika je procijenjen na {result.probability}%.</span>
                 </p>
-                {!legalResult && (
-                  <button 
-                    onClick={handleLegalAnalysis}
-                    className="mt-4 w-full md:w-auto px-6 py-3 bg-[#1E293B] text-white rounded-xl font-bold text-sm uppercase flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-md group"
-                  >
-                    <Scale size={18} className="group-hover:rotate-12 transition-transform" />
-                    Klikni za pravnu usklađenost
-                  </button>
-                )}
+                {/* Pravna analiza se sada radi automatski u prvom run-u */}
               </section>
 
               {/* Legal Analysis Section (if present) */}
@@ -634,7 +619,7 @@ Analiza generisana na: ${BASE_URL}
                       onClick={handleDownloadReport}
                       className="w-full p-4 bg-white border border-slate-200 text-slate-900 rounded-xl font-bold text-sm uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
                     >
-                      <Download size={18} /> Preuzmi izvještaj
+                      <Download size={18} /> Preuzmi PDF
                     </button>
                   </div>
                </div>

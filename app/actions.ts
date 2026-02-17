@@ -3,7 +3,12 @@
 import 'server-only';
 
 import { GoogleGenAI, Type } from '@google/genai';
-import type { AnalysisResult, LegalComplianceResult, ProcurementData } from '../types';
+import type {
+  AnalysisResult,
+  LegalComplianceResult,
+  ProcurementData,
+  UnifiedAnalysisResult,
+} from '../types';
 
 const LEGAL_CONTEXT = `
 Kao AI revizor, koristiš Zakon o javnim nabavkama Crne Gore (Službeni list CG br. 74/2019, 3/2023, 11/2023, 84/2024)
@@ -130,6 +135,154 @@ export async function analyzeProcurement(data: ProcurementData): Promise<Analysi
   });
 
   return JSON.parse(response.text || '{}') as AnalysisResult;
+}
+
+export async function analyzeProcurementWithLegal(data: ProcurementData): Promise<UnifiedAnalysisResult> {
+  const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+
+  const formattedSpecsFull = data.specification
+    .map(
+      (item, index) => `STAVKA #${index + 1}:
+     - Opis: ${item.description}
+     - Karakteristike: ${item.characteristics}
+     - Količina: ${item.quantity}`,
+    )
+    .join('\n\n');
+
+  const formattedSpecsShort = data.specification
+    .map((item, index) => `STAVKA #${index + 1}: ${item.description} - ${item.characteristics}`)
+    .join('; ');
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: `
+    ${LEGAL_CONTEXT}
+
+    ANALIZIRAJ NABAVKU I URADI PRAVNU USKLAĐENOST (u jednom odgovoru):
+
+    SPECIFIKACIJA:
+    ${formattedSpecsFull}
+    UNESENA CIJENA: ${data.price} EUR
+
+    ZADATAK A (FORENZIČKA ANALIZA):
+    - Izračunaj realnu TRŽIŠNU PROCJENU vrijednosti nabavke.
+    - Detaljno obrazloži tržišnu analizu.
+    - SIGNALI RIZIKA (analysis.redFlags): strogo bez pominjanja članova zakona.
+
+    ZADATAK B (PRAVNA USKLAĐENOST):
+    - Na osnovu ZJN i Smjernica MF (Septembar 2023), identifikuj potencijalne povrede.
+    - U pravnoj analizi SMiješ navoditi članove zakona (legal.violations[*].article).
+    - BUDI OBRAZRIV U KVALIFIKACIJAMA: koristi izraze "ukazuje na potencijalno odstupanje", "može doći do povrede načela", "potrebno dodatno provjeriti".
+
+    PODACI ZA PRAVNU ANALIZU (sažeto):
+    - Specifikacija: ${formattedSpecsShort}
+    - Cijena: ${data.price} EUR
+
+    ODGOVORI NA CRNOGORSKOM JEZIKU.
+    `,
+    config: {
+      tools: [{ googleSearch: {} }],
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          analysis: {
+            type: Type.OBJECT,
+            properties: {
+              probability: { type: Type.NUMBER },
+              priceAssessment: { type: Type.STRING },
+              redFlags: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    description: { type: Type.STRING },
+                    severity: { type: Type.STRING },
+                    explanation: { type: Type.STRING },
+                  },
+                  required: ['description', 'severity', 'explanation'],
+                },
+              },
+              redFlagCategories: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    category: { type: Type.STRING },
+                    score: { type: Type.NUMBER },
+                  },
+                  required: ['category', 'score'],
+                },
+              },
+              detailedExplanation: { type: Type.STRING },
+              marketValueEstimate: { type: Type.STRING },
+              savings: {
+                type: Type.OBJECT,
+                properties: {
+                  estimatedMarketPrice: { type: Type.NUMBER },
+                  differenceAmount: { type: Type.NUMBER },
+                  differencePercentage: { type: Type.NUMBER },
+                  socialImpactDescription: { type: Type.STRING },
+                },
+                required: [
+                  'estimatedMarketPrice',
+                  'differenceAmount',
+                  'differencePercentage',
+                  'socialImpactDescription',
+                ],
+              },
+              conclusion: { type: Type.STRING },
+              tieredRecommendations: {
+                type: Type.OBJECT,
+                properties: {
+                  immediateActions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  strategicAdvice: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  preventiveMeasures: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['immediateActions', 'strategicAdvice', 'preventiveMeasures'],
+              },
+            },
+            required: [
+              'probability',
+              'priceAssessment',
+              'redFlags',
+              'redFlagCategories',
+              'detailedExplanation',
+              'marketValueEstimate',
+              'savings',
+              'conclusion',
+              'tieredRecommendations',
+            ],
+          },
+          legal: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              violations: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    article: { type: Type.STRING },
+                    principle: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    cautionaryNote: { type: Type.STRING },
+                  },
+                  required: ['article', 'principle', 'description', 'cautionaryNote'],
+                },
+              },
+              guidelineCompliance: { type: Type.STRING },
+              overallComplianceScore: { type: Type.NUMBER },
+            },
+            required: ['summary', 'violations', 'guidelineCompliance', 'overallComplianceScore'],
+          },
+        },
+        required: ['analysis', 'legal'],
+      },
+    },
+  });
+
+  return JSON.parse(response.text || '{}') as UnifiedAnalysisResult;
 }
 
 export async function analyzeLegalCompliance(

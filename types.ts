@@ -51,6 +51,11 @@ export interface LegalComplianceResult {
   overallComplianceScore: number; // 0-100
 }
 
+export interface UnifiedAnalysisResult {
+  analysis: AnalysisResult;
+  legal: LegalComplianceResult;
+}
+
 export interface AnalysisResult {
   probability: number;
   priceAssessment: PriceAssessment;

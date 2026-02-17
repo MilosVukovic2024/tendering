@@ -1,8 +1,10 @@
 import React from 'react';
-import { Document, Font, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import fs from 'node:fs';
+import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 
 import type { AnalysisResult, LegalComplianceResult, ProcurementData } from '../types';
+
+// Use built-in PDF fonts only (always available)
+const PDF_FONT_FAMILY = 'Helvetica';
 
 type Props = {
   generatedAtISO: string;
@@ -10,104 +12,6 @@ type Props = {
   result: AnalysisResult;
   legalResult: LegalComplianceResult | null;
 };
-
-const PDF_FONT_FAMILY = 'TenderingBody';
-
-function registerPdfFontsOnce() {
-  // Register a font that supports Latin Extended (ć, ž, š, č, đ).
-  // We prefer OS fonts to avoid bundling binary TTFs in the repo.
-  try {
-    // Prevent duplicate registration in dev/hot reload.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const g: any = globalThis as any;
-    if (g.__tenderingPdfFontsRegistered) return;
-
-    const candidates =
-      process.platform === 'win32'
-        ? [
-            {
-              regular: 'C:\\Windows\\Fonts\\segoeui.ttf',
-              bold: 'C:\\Windows\\Fonts\\segoeuib.ttf',
-              italic: 'C:\\Windows\\Fonts\\segoeuii.ttf',
-              boldItalic: 'C:\\Windows\\Fonts\\segoeuiz.ttf',
-            },
-            {
-              regular: 'C:\\Windows\\Fonts\\arial.ttf',
-              bold: 'C:\\Windows\\Fonts\\arialbd.ttf',
-              italic: 'C:\\Windows\\Fonts\\ariali.ttf',
-              boldItalic: 'C:\\Windows\\Fonts\\arialbi.ttf',
-            },
-          ]
-        : process.platform === 'darwin'
-          ? [
-              {
-                regular: '/System/Library/Fonts/Supplemental/Arial.ttf',
-                bold: '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
-                italic: '/System/Library/Fonts/Supplemental/Arial Italic.ttf',
-                boldItalic: '/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf',
-              },
-              {
-                regular: '/Library/Fonts/Arial.ttf',
-                bold: '/Library/Fonts/Arial Bold.ttf',
-                italic: '/Library/Fonts/Arial Italic.ttf',
-                boldItalic: '/Library/Fonts/Arial Bold Italic.ttf',
-              },
-            ]
-          : [
-              {
-                regular: '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                bold: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-                italic: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf',
-                boldItalic: '/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf',
-              },
-              {
-                regular: '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-                bold: '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-                italic: '/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf',
-                boldItalic: '/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf',
-              },
-            ];
-
-    for (const c of candidates) {
-      const hasRegular = c.regular && fs.existsSync(c.regular);
-      if (!hasRegular) continue;
-
-      Font.register({ family: PDF_FONT_FAMILY, src: c.regular, fontWeight: 400 });
-
-      if (c.bold && fs.existsSync(c.bold)) {
-        Font.register({ family: PDF_FONT_FAMILY, src: c.bold, fontWeight: 700 });
-      }
-
-      if (c.italic && fs.existsSync(c.italic)) {
-        Font.register({
-          family: PDF_FONT_FAMILY,
-          src: c.italic,
-          fontWeight: 400,
-          fontStyle: 'italic',
-        });
-      }
-
-      if (c.boldItalic && fs.existsSync(c.boldItalic)) {
-        Font.register({
-          family: PDF_FONT_FAMILY,
-          src: c.boldItalic,
-          fontWeight: 700,
-          fontStyle: 'italic',
-        });
-      }
-
-      g.__tenderingPdfFontsRegistered = true;
-      return;
-    }
-
-    // If no OS font found, we keep default Helvetica (may miss diacritics).
-    g.__tenderingPdfFontsRegistered = true;
-  } catch {
-    // Never fail PDF generation just because font registration failed.
-  }
-}
-
-registerPdfFontsOnce();
 
 const styles = StyleSheet.create({
   page: {
@@ -255,8 +159,6 @@ function severityPillStyle(sev: string | undefined) {
 }
 
 function formatPriceAssessment(value: unknown) {
-  // Make the value wrap nicely in PDF (break points at spaces).
-  // Also handles legacy snake_case values (e.g. "suspiciously_low").
   const s = String(value ?? '');
   return s.replace(/_/g, ' ').trim();
 }
@@ -399,9 +301,7 @@ export function createTenderingReportPdfDocument({
                     <Text style={styles.pill}>{v.principle}</Text>
                   </View>
                   <Text style={styles.small}>{v.description}</Text>
-                  <Text style={[styles.small, { color: '#64748b', fontStyle: 'italic' }]}>
-                    {v.cautionaryNote}
-                  </Text>
+                  <Text style={[styles.small, { color: '#64748b' }]}>{v.cautionaryNote}</Text>
                 </View>
               ))
             ) : (
@@ -416,8 +316,6 @@ export function createTenderingReportPdfDocument({
   );
 }
 
-// Backwards-compatible named export (if anything still imports it as a component).
 export function TenderingReportPdfDocument(props: Props) {
   return createTenderingReportPdfDocument(props);
 }
-

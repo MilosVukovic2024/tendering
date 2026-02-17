@@ -10,6 +10,39 @@ const DEFAULT_BODY_FONT = 'Times-Roman';
 // Register Inter font with correct weights: 300,400,500,600,700,800,900 per layout.tsx
 try {
   Font.register({
+    family: 'Inter',
+    fonts: [
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lO6z0y0.woff2', // 300 (Light)
+        fontWeight: 300,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lOSz0y0.woff2', // 400 (Regular)
+        fontWeight: 400,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lO2z0y0.woff2', // 500 (Medium)
+        fontWeight: 500,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lPGz0y0.woff2', // 600 (SemiBold)
+        fontWeight: 600,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lOqz0y0.woff2', // 700 (Bold)
+        fontWeight: 700,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lP6z0y0.woff2', // 800 (ExtraBold)
+        fontWeight: 800,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lPyz0y0.woff2', // 900 (Black)
+        fontWeight: 900,
+      },
+    ],
+  });
+  Font.register({
     family: 'TenderingBody',
     fonts: [
       {
@@ -42,6 +75,7 @@ try {
       },
     ],
   });
+
 } catch (e) {
   // Ignore registration error
 }

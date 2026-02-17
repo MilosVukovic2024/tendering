@@ -4,21 +4,46 @@ import { createTenderingReportPdfDocument } from '../../reportPdfDocument';
 
 export const runtime = 'nodejs';
 
-// Register a default fallback font (such as 'Times-Roman' which comes bundled with react-pdf/renderer)
+// Fallback font
 const DEFAULT_BODY_FONT = 'Times-Roman';
 
-// Register Inter as a preferred font if resources are available
+// Register Inter font with correct weights: 300,400,500,600,700,800,900 per layout.tsx
 try {
   Font.register({
     family: 'Inter',
     fonts: [
-      { src: 'https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-400-normal.ttf', fontWeight: 400 },
-      { src: 'https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-700-normal.ttf', fontWeight: 700 },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lO6z0y0.woff2', // 300 (Light)
+        fontWeight: 300,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lOSz0y0.woff2', // 400 (Regular)
+        fontWeight: 400,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lO2z0y0.woff2', // 500 (Medium)
+        fontWeight: 500,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lPGz0y0.woff2', // 600 (SemiBold)
+        fontWeight: 600,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lOqz0y0.woff2', // 700 (Bold)
+        fontWeight: 700,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lP6z0y0.woff2', // 800 (ExtraBold)
+        fontWeight: 800,
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrKc9bHSJXGdDaW9yt_yZ7lPyz0y0.woff2', // 900 (Black)
+        fontWeight: 900,
+      },
     ],
   });
 } catch (e) {
-  // If registration fails, we will rely on the builtin fonts like Times-Roman
-  // This catch is just for safety - react-pdf's Font.register does not usually throw
+  // Ignore registration error
 }
 
 export async function POST(req: Request) {
@@ -31,7 +56,6 @@ export async function POST(req: Request) {
 
     let document;
     try {
-      // Only pass known/allowed props to the document generator
       document = createTenderingReportPdfDocument({
         generatedAtISO: body.generatedAtISO,
         formData: body.formData,
@@ -40,25 +64,21 @@ export async function POST(req: Request) {
       });
     } catch (docErr: any) {
       if (/Font family not registered/i.test(docErr.message)) {
-        // Only retry with bodyFontFamily if the document generator supports it in its typing
-        // Otherwise, remove this extra property to avoid type errors
+        // Fix: Remove bodyFontFamily since it's not a recognized prop in the Props type
         document = createTenderingReportPdfDocument({
           generatedAtISO: body.generatedAtISO,
           formData: body.formData,
           result: body.result,
           legalResult: body.legalResult ?? null,
-          // The next line is commented out to avoid type errors (see lint warning)
-          // bodyFontFamily: DEFAULT_BODY_FONT,
+          // bodyFontFamily: DEFAULT_BODY_FONT, // <-- removed due to type error
         });
       } else {
         throw docErr;
       }
     }
 
-    // Use renderToStream for performance and memory efficiency
     const stream = await renderToStream(document);
 
-    // Buffer the PDF stream
     const chunks: Uint8Array[] = [];
     for await (const chunk of stream) {
       if (typeof chunk === 'string') {
@@ -78,10 +98,8 @@ export async function POST(req: Request) {
       },
     });
   } catch (err: any) {
-    // Log the actual error, including font registration specifics
     console.error('PDF Generation Error:', err?.message, err?.stack);
 
-    // Augment error message if font issue detected
     let details = err?.message ?? 'Unknown error';
     if (details && /Font family not registered/i.test(details)) {
       details += ' - Font not registered: This usually means a custom font was referenced (e.g., "TenderingBody") without calling Font.register. Using a fallback built-in font may resolve this.';

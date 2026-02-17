@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
-import { renderToBuffer } from '@react-pdf/renderer';
+import { renderToBuffer, Font } from '@react-pdf/renderer';
 
 import type { AnalysisResult, LegalComplianceResult, ProcurementData } from '../../../types';
 import { createTenderingReportPdfDocument } from '../../reportPdfDocument';
 
 export const runtime = 'nodejs';
+
+// Register the custom font 'TenderingBody' if not already registered
+// Point this to the path of your font file - adjust as needed!
+
+// Register Inter with direct links to the font files
+Font.register({
+  family: 'Inter',
+  fonts: [
+    { src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff2', fontWeight: 300 },
+    { src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff2', fontWeight: 400 },
+    { src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hjp-Ek-_EeA.woff2', fontWeight: 500 },
+    { src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYAZ9hjp-Ek-_EeA.woff2', fontWeight: 600 },
+    { src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYAZ9hjp-Ek-_EeA.woff2', fontWeight: 700 },
+  ],
+});
 
 type Body = {
   generatedAtISO: string;
@@ -47,7 +62,6 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error('report-pdf generation failed', err);
-    return NextResponse.json({ error: 'PDF generation failed' }, { status: 500 });
+    return NextResponse.json({ error: 'PDF generation failed - font not registered or generation failed' }, { status: 500 });
   }
 }
-
